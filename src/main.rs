@@ -7,11 +7,6 @@ fn convert_to_lines(pressure: f32) -> i32 {
         return 0
     }
 
-    // if pressure <= 5.0 {
-    //     (1.0 * pressure.signum()) as i32
-    // } else {
-    //     (2.0 * pressure.signum()) as i32
-    // }
     (1.0 * pressure.signum()) as i32
 }
 
