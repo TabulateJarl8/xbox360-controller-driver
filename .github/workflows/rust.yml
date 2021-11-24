@@ -18,5 +18,5 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build
       run: | 
-        sudo apt install -y libudev-dev pkg-config
+        sudo apt install -y libudev-dev pkg-config xdotool
         cargo build --verbose
