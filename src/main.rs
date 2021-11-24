@@ -1,4 +1,4 @@
-use enigo::{Enigo, MouseControllable, MouseButton};
+use enigo::{Enigo, MouseControllable, MouseButton, KeyboardControllable};
 use gilrs::{Gilrs, Button, Event, EventType, Axis};
 
 fn convert_to_lines(pressure: f32) -> i32 {
@@ -7,11 +7,12 @@ fn convert_to_lines(pressure: f32) -> i32 {
         return 0
     }
 
-    if pressure <= 5.0 {
-        (1.0 * pressure.signum()) as i32
-    } else {
-        (2.0 * pressure.signum()) as i32
-    }
+    // if pressure <= 5.0 {
+    //     (1.0 * pressure.signum()) as i32
+    // } else {
+    //     (2.0 * pressure.signum()) as i32
+    // }
+    (1.0 * pressure.signum()) as i32
 }
 
 fn main() {
@@ -26,16 +27,28 @@ fn main() {
     let mut mouse_y_vel: i32 = 0;
     let mut scroll_x_vel: i32 = 0;
     let mut scroll_y_vel: i32 = 0;
-    let mut cycle: i32 = 0;
+    let mut backspace: bool = false;
     let mut enigo = Enigo::new();
+
+    let mut cycle: i32 = 0;
+    let mut slower_cycle: i32 = 0;
 
     loop {
         cycle += 1;
-        if cycle == 10000 {
+        if cycle == 20000 {
             enigo.mouse_scroll_y(scroll_y_vel);
             enigo.mouse_scroll_x(scroll_x_vel);
             enigo.mouse_move_relative(mouse_x_vel, mouse_y_vel);
+
+            slower_cycle += 1;
             cycle = 0;
+
+            if slower_cycle == 15 {
+                if backspace == true {
+                    enigo.key_sequence_parse("{+UNICODE}\u{0008}{-UNICODE}");
+                }
+                slower_cycle = 0;
+            }
         }
 
 
@@ -68,6 +81,13 @@ fn main() {
                 EventType::ButtonReleased(Button::South, _) => {
                     enigo.mouse_up(MouseButton::Left);
                 }
+                EventType::ButtonPressed(Button::East, _) => {
+                    backspace = true;
+                }
+                EventType::ButtonReleased(Button::East, _) => {
+                    backspace = false;
+                }
+                EventType::ButtonChanged(..) => {}
                 _ => {println!("{:?}", event);}
             }
         }
