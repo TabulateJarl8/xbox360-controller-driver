@@ -2,6 +2,7 @@ use pasts::Loop;
 use std::task::Poll::{self, Pending, Ready};
 use stick::{Controller, Event, Listener};
 use enigo::*;
+use std::future::Future;
 
 type Exit = usize;
 
@@ -60,10 +61,20 @@ impl State {
         Pending
     }
 
-    fn move_mouse(&mut self) {
-        if self.mouse_y_vel != 0 || self.mouse_x_vel != 0 {
+    fn move_mouse<T>(&mut self, _: T) -> Poll<Exit> {
+        // if self.mouse_y_vel != 0 || self.mouse_x_vel != 0 {
             self.enigo.mouse_move_relative(self.mouse_x_vel, self.mouse_y_vel);
+            Pending
+        // }
+    }
+
+    async fn check_mouse_vel(&mut self) -> impl Future<Output = ()> {
+        loop {
+            if self.mouse_y_vel != 0 || self.mouse_x_vel != 0 {
+                break;
+            }
         }
+        future::ready(())
     }
 }
 
@@ -79,7 +90,8 @@ async fn event_loop() {
 
     let player_id = Loop::new(&mut state)
         .when(|s| &mut s.listener, State::connect)
-        .when(|s| &mut (s.mouse_x_vel != 0 as i32 || s.mouse_y_vel != 0 as i32), State::move_mouse)
+        .when(|s| &mut s.check_mouse_vel(), State::move_mouse)
+        // .when(|s| &mut (s.mouse_x_vel != 0 as i32 || s.mouse_y_vel != 0 as i32), State::move_mouse)
         .poll(|s| &mut s.controllers, State::event)
         .await;
 
