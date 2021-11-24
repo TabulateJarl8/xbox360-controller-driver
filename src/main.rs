@@ -1,104 +1,75 @@
-use pasts::Loop;
-use std::task::Poll::{self, Pending, Ready};
-use stick::{Controller, Event, Listener};
-use enigo::*;
-use std::future::{self, Future};
+use enigo::{Enigo, MouseControllable, MouseButton};
+use gilrs::{Gilrs, Button, Event, EventType, Axis};
 
-type Exit = usize;
-
-struct State {
-    listener: Listener,
-    controllers: Vec<Controller>,
-    rumble: (f32, f32),
-    enigo: Enigo,
-    mouse_x_vel: i32,
-    mouse_y_vel: i32,
-}
-
-impl State {
-    fn connect(&mut self, controller: Controller) -> Poll<Exit> {
-        println!(
-            "Connected p{}, id: {:016X}, name: {}",
-            self.controllers.len() + 1,
-            controller.id(),
-            controller.name(),
-        );
-        self.controllers.push(controller);
-        Pending
+fn convert_to_lines(pressure: f32) -> i32 {
+    // covers 0 case
+    if pressure.abs() <= 2.0 {
+        return 0
     }
 
-    fn event(&mut self, id: usize, event: Event) -> Poll<Exit> {
-        let player = id + 1;
-        println!("p{}: {}", player, event);
-        match event {
-            Event::Disconnect => {
-                self.controllers.swap_remove(id);
-            }
-            // Event::MenuR(true) => return Ready(player),
-            Event::ActionA(pressed) => {
-                self.controllers[id].rumble(f32::from(u8::from(pressed)));
-            }
-            Event::ActionB(pressed) => {
-                self.controllers[id].rumble(0.5 * f32::from(u8::from(pressed)));
-            }
-            Event::BumperL(pressed) => {
-                self.rumble.0 = f32::from(u8::from(pressed));
-                self.controllers[id].rumble(self.rumble);
-            }
-            Event::BumperR(pressed) => {
-                self.rumble.1 = f32::from(u8::from(pressed));
-                self.controllers[id].rumble(self.rumble);
-            }
-            Event::JoyX(pressed) => {
-                self.mouse_x_vel = (pressed * 10.0).floor() as i32;
-            }
-            Event::JoyY(pressed) => {
-                self.mouse_y_vel = (pressed * 10.0).floor() as i32;
-            }
-            _ => {}
-        }
-
-        Pending
+    if pressure <= 5.0 {
+        (1.0 * pressure.signum()) as i32
+    } else {
+        (2.0 * pressure.signum()) as i32
     }
-
-    fn move_mouse<T>(&mut self, _: T) -> Poll<Exit> {
-        // if self.mouse_y_vel != 0 || self.mouse_x_vel != 0 {
-            self.enigo.mouse_move_relative(self.mouse_x_vel, self.mouse_y_vel);
-            Pending
-        // }
-    }
-
-    async fn check_mouse_vel(&mut self) -> impl Future<Output = ()> + Unpin {
-        loop {
-            if self.mouse_y_vel != 0 || self.mouse_x_vel != 0 {
-                break;
-            }
-        }
-        let resp = future::ready(());
-        resp
-    }
-}
-
-async fn event_loop() {
-    let mut state = State {
-        listener: Listener::default(),
-        controllers: Vec::new(),
-        rumble: (0.0, 0.0),
-        enigo: Enigo::new(),
-        mouse_x_vel: 0,
-        mouse_y_vel: 0,
-    };
-
-    let player_id = Loop::new(&mut state)
-        .when(|s| &mut s.listener, State::connect)
-        .when(|s| &mut s.check_mouse_vel(), State::move_mouse)
-        // .when(|s| &mut (s.mouse_x_vel != 0 as i32 || s.mouse_y_vel != 0 as i32), State::move_mouse)
-        .poll(|s| &mut s.controllers, State::event)
-        .await;
-
-    println!("p{} ended the session", player_id);
 }
 
 fn main() {
-    pasts::block_on(event_loop());
+    let mut gilrs = Gilrs::new().unwrap();
+
+    // Iterate over all connected gamepads
+    for (_id, gamepad) in gilrs.gamepads() {
+        println!("{} is {:?}", gamepad.name(), gamepad.power_info());
+    }
+
+    let mut mouse_x_vel: i32 = 0;
+    let mut mouse_y_vel: i32 = 0;
+    let mut scroll_x_vel: i32 = 0;
+    let mut scroll_y_vel: i32 = 0;
+    let mut cycle: i32 = 0;
+    let mut enigo = Enigo::new();
+
+    loop {
+        cycle += 1;
+        if cycle == 10000 {
+            enigo.mouse_scroll_y(scroll_y_vel);
+            enigo.mouse_scroll_x(scroll_x_vel);
+            enigo.mouse_move_relative(mouse_x_vel, mouse_y_vel);
+            cycle = 0;
+        }
+
+
+        // Examine new events
+        while let Some(Event { id: _, event, .. }) = gilrs.next_event() {
+            // println!("{:?} New event from {}: {:?}", time, id, event);
+
+            match event {
+                EventType::AxisChanged(Axis::LeftStickX, direction, _) => {
+                    mouse_x_vel = ((direction * 10.0).floor()) as i32;
+                    if mouse_x_vel.abs() <= 2 {
+                        mouse_x_vel = 0;
+                    }
+                }
+                EventType::AxisChanged(Axis::LeftStickY, direction, _) => {
+                    mouse_y_vel = -((direction * 10.0).floor()) as i32;
+                    if mouse_y_vel.abs() <= 2 {
+                        mouse_y_vel = 0;
+                    }
+                }
+                EventType::AxisChanged(Axis::RightStickX, direction, _) => {
+                    scroll_x_vel = convert_to_lines((direction * 10.0).floor());
+                }
+                EventType::AxisChanged(Axis::RightStickY, direction, _) => {
+                    scroll_y_vel = -convert_to_lines((direction * 10.0).floor());
+                }
+                EventType::ButtonPressed(Button::South, _) => {
+                    enigo.mouse_down(MouseButton::Left);
+                }
+                EventType::ButtonReleased(Button::South, _) => {
+                    enigo.mouse_up(MouseButton::Left);
+                }
+                _ => {println!("{:?}", event);}
+            }
+        }
+    }
 }
