@@ -2,7 +2,7 @@ use pasts::Loop;
 use std::task::Poll::{self, Pending, Ready};
 use stick::{Controller, Event, Listener};
 use enigo::*;
-use std::future::Future;
+use std::future::{self, Future};
 
 type Exit = usize;
 
@@ -68,13 +68,14 @@ impl State {
         // }
     }
 
-    async fn check_mouse_vel(&mut self) -> impl Future<Output = ()> {
+    async fn check_mouse_vel(&mut self) -> impl Future<Output = ()> + Unpin {
         loop {
             if self.mouse_y_vel != 0 || self.mouse_x_vel != 0 {
                 break;
             }
         }
-        future::ready(())
+        let resp = future::ready(());
+        resp
     }
 }
 
